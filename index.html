@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Czółko AI - Piosenki</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #121212;
+            color: #ffffff;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            text-align: center;
+            padding: 20px;
+            overflow: hidden;
+            user-select: none;
+        }
+        .card {
+            background: #1e1e2e;
+            border-radius: 24px;
+            padding: 30px 20px;
+            width: 100%;
+            max-width: 500px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            border: 2px solid #333;
+        }
+        .category {
+            font-size: 1.2rem;
+            color: #ff007f;
+            text-transform: uppercase;
+            font-weight: bold;
+            margin-bottom: 15px;
+            letter-spacing: 2px;
+        }
+        .title {
+            font-size: 2.2rem;
+            font-weight: 900;
+            margin-bottom: 10px;
+            color: #ffffff;
+            line-height: 1.2;
+        }
+        .artist {
+            font-size: 1.4rem;
+            color: #00f2fe;
+            margin-bottom: 20px;
+            font-weight: 600;
+        }
+        .lyric {
+            font-size: 1.1rem;
+            font-style: italic;
+            color: #aaaaaa;
+            background: rgba(255,255,255,0.05);
+            padding: 15px;
+            border-radius: 12px;
+            border-left: 4px solid #ff007f;
+        }
+        .btn {
+            background: #00f2fe;
+            color: #000;
+            border: none;
+            padding: 18px 36px;
+            font-size: 1.3rem;
+            font-weight: bold;
+            border-radius: 50px;
+            cursor: pointer;
+            margin-top: 25px;
+            box-shadow: 0 4px 15px rgba(0,242,254,0.4);
+        }
+        .instructions {
+            margin-top: 20px;
+            font-size: 0.9rem;
+            color: #777;
+        }
+        .status {
+            position: absolute;
+            top: 15px;
+            font-size: 0.8rem;
+            color: #555;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="status" id="status">Ładowanie bazy...</div>
+
+    <div class="card" id="card">
+        <div class="category" id="category">🎈 CZÓŁKO AI</div>
+        <div class="title" id="title">Gotowy na grę?</div>
+        <div class="artist" id="artist">Kliknij przycisk poniżej!</div>
+        <div class="lyric" id="lyric">Trzymaj telefon na czole skierowany do graczy. Przechyl w dół = Dobrze, w górę = Pas.</div>
+        <button class="btn" id="start-btn" onclick="startGame()">START GRY</button>
+    </div>
+
+    <div class="instructions" id="instructions">
+        👇 Przechyl w DÓŁ = Zgadnięte (Punkt)<br>
+        ☝️ Przechyl w GÓRĘ = Pas (Następna)
+    </div>
+
+    <script>
+        const SHEET_ID = '1l1vzr1-rhgaR_tUM0Uj1fZhrFuGDpuLT67Bk4WVXT3Q';
+        const SHEET_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:json`;
+
+        let songs = [];
+        let currentSong = null;
+        let isCooldown = false;
+
+        async function fetchSongs() {
+            try {
+                const response = await fetch(SHEET_URL);
+                const text = await response.text();
+                const json = JSON.parse(text.substr(47).slice(0, -2));
+                
+                const rows = json.table.rows;
+                songs = rows.map(row => ({
+                    title: row.c[0] ? row.c[0].v : '',
+                    artist: row.c[1] ? row.c[1].v : '',
+                    category: row.c[2] ? row.c[2].v : 'Muzyka',
+                    lyric: row.c[3] ? row.c[3].v : ''
+                })).filter(song => song.title !== '' && song.title !== 'Tytuł');
+
+                document.getElementById('status').innerText = `Wczytano ${songs.length} piosenek!`;
+            } catch (err) {
+                document.getElementById('status').innerText = 'Błąd wczytywania bazy. Sprawdź dostęp do Sheets!';
+                console.error(err);
+            }
+        }
+
+        function drawSong() {
+            if (songs.length === 0) {
+                document.getElementById('title').innerText = "Koniec bazy!";
+                document.getElementById('artist').innerText = "";
+                document.getElementById('lyric').innerText = "Dodaj więcej piosenek do Sheets.";
+                return;
+            }
+
+            const randomIndex = Math.floor(Math.random() * songs.length);
+            currentSong = songs[randomIndex];
+
+            document.getElementById('category').innerText = currentSong.category;
+            document.getElementById('title').innerText = currentSong.title;
+            document.getElementById('artist').innerText = currentSong.artist;
+            document.getElementById('lyric').innerText = currentSong.lyric ? `"${currentSong.lyric}"` : '';
+        }
+
+        function startGame() {
+            if (typeof DeviceMotionEvent !== 'undefined' && typeof DeviceMotionEvent.requestPermission === 'function') {
+                DeviceMotionEvent.requestPermission()
+                    .then(response => {
+                        if (response == 'granted') {
+                            window.addEventListener('deviceorientation', handleMotion);
+                        }
+                    })
+                    .catch(console.error);
+            } else {
+                window.addEventListener('deviceorientation', handleMotion);
+            }
+
+            document.getElementById('start-btn').style.display = 'none';
+            drawSong();
+        }
+
+        function handleMotion(event) {
+            if (isCooldown) return;
+
+            const beta = event.beta; // Przechylenie przód/tył (-180 do 180)
+
+            // Przechylenie w dół (telefon czołem w stronę podłogi)
+            if (beta > 130 || beta < -130) {
+                triggerAction('zgadniete');
+            } 
+            // Przechylenie w górę (telefon czołem w stronę sufitu)
+            else if (beta > 20 && beta < 60) {
+                triggerAction('pas');
+            }
+        }
+
+        function triggerAction(type) {
+            isCooldown = true;
+            const card = document.getElementById('card');
+            
+            if (type === 'zgadniete') {
+                card.style.borderColor = '#00ff88';
+            } else {
+                card.style.borderColor = '#ff3366';
+            }
+
+            setTimeout(() => {
+                card.style.borderColor = '#333';
+                drawSong();
+                isCooldown = false;
+            }, 1000);
+        }
+
+        fetchSongs();
+    </script>
+</body>
+</html>
