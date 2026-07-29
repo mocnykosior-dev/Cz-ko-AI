@@ -2,29 +2,43 @@
 <html lang="pl">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>Czółko AI - Piosenki</title>
+    
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Czółko AI">
+
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
             background-color: #121212;
             color: #ffffff;
             display: flex;
             flex-direction: column;
-            justify-content: center;
+            justify-content: space-between;
             align-items: center;
+            /* Użycie dvh naprawia ucinanie dółu na iPhone */
             min-height: 100vh;
+            min-height: 100dvh; 
             text-align: center;
-            padding: 20px;
+            /* Uwzględnienie bezpiecznych stref ekranu iPhone (Notch / wyspa) */
+            padding-top: max(20px, env(safe-area-inset-top));
+            padding-bottom: max(20px, env(safe-area-inset-bottom));
+            padding-left: max(15px, env(safe-area-inset-left));
+            padding-right: max(15px, env(safe-area-inset-right));
             overflow: hidden;
             user-select: none;
+        }
+        .header-container {
+            width: 100%;
+            margin-top: 10px;
         }
         .counter-bar {
             font-size: 2rem;
             font-weight: bold;
             color: #ff007f;
-            margin-bottom: 10px;
         }
         .card {
             background: #1e1e2e;
@@ -35,6 +49,7 @@
             box-shadow: 0 10px 30px rgba(0,0,0,0.5);
             border: 4px solid #333;
             transition: border-color 0.2s ease;
+            margin: auto 0;
         }
         .category {
             font-size: 1.1rem;
@@ -45,20 +60,20 @@
             letter-spacing: 2px;
         }
         .title {
-            font-size: 2.2rem;
+            font-size: 2rem;
             font-weight: 900;
             margin-bottom: 8px;
             color: #ffffff;
             line-height: 1.2;
         }
         .artist {
-            font-size: 1.3rem;
+            font-size: 1.2rem;
             color: #00f2fe;
             margin-bottom: 15px;
             font-weight: 600;
         }
         .lyric {
-            font-size: 1rem;
+            font-size: 0.95rem;
             font-style: italic;
             color: #aaaaaa;
             background: rgba(255,255,255,0.05);
@@ -79,16 +94,15 @@
             box-shadow: 0 4px 15px rgba(0,242,254,0.4);
         }
         .instructions {
-            margin-top: 20px;
-            font-size: 0.95rem;
+            margin-bottom: 10px;
+            font-size: 0.9rem;
             color: #aaa;
             line-height: 1.4;
         }
         .status {
-            position: absolute;
-            top: 15px;
             font-size: 0.8rem;
             color: #666;
+            margin-top: 5px;
         }
         .score-board {
             font-size: 1.8rem;
@@ -99,8 +113,10 @@
 </head>
 <body onclick="handleTap(event)">
 
-    <div class="status" id="status">Ładowanie bazy...</div>
-    <div class="counter-bar" id="counter">1 / 10</div>
+    <div class="header-container">
+        <div class="status" id="status">Ładowanie bazy...</div>
+        <div class="counter-bar" id="counter">1 / 10</div>
+    </div>
 
     <div class="card" id="card">
         <div class="category" id="category">🎈 CZÓŁKO AI</div>
@@ -119,7 +135,7 @@
         const SHEET_ID = '1l1vzr1-rhgaR_tUM0Uj1fZhrFuGDpuLT67Bk4WVXT3Q';
         const SHEET_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:json`;
 
-        const SONGS_PER_ROUND = 10; // Liczba piosenek dla jednego gracza
+        const SONGS_PER_ROUND = 10;
 
         let allSongs = [];
         let availableSongs = [];
@@ -130,6 +146,18 @@
         let scoreCorrect = 0;
         let scorePassed = 0;
         let songsPlayedCount = 0;
+        let wakeLock = null;
+
+        // Funkcja blokująca wygaszanie ekranu
+        async function requestWakeLock() {
+            try {
+                if ('wakeLock' in navigator) {
+                    wakeLock = await navigator.wakeLock.request('screen');
+                }
+            } catch (err) {
+                console.log('Wake Lock Error:', err);
+            }
+        }
 
         async function fetchSongs() {
             try {
@@ -153,18 +181,15 @@
         }
 
         function drawSong() {
-            // Sprawdź czy gracz rozegrał już 10 piosenek
             if (songsPlayedCount >= SONGS_PER_ROUND) {
                 endGame("Runda zakończona!");
                 return;
             }
 
-            // Jeśli pula się skończyła, odśwież dostępną listę z całej bazy
             if (availableSongs.length === 0) {
                 availableSongs = [...allSongs];
             }
 
-            // Losowanie bez powtórek
             const randomIndex = Math.floor(Math.random() * availableSongs.length);
             currentSong = availableSongs.splice(randomIndex, 1)[0];
             songsPlayedCount++;
@@ -179,7 +204,9 @@
         function startGame(event) {
             if(event) event.stopPropagation();
 
-            // Jeśli pula piosenek jest zbyt mała, załaduj całą bazę od nowa
+            // Aktywacja blokady wygaszania ekranu
+            requestWakeLock();
+
             if (availableSongs.length < SONGS_PER_ROUND) {
                 availableSongs = [...allSongs];
             }
@@ -191,7 +218,6 @@
 
             document.getElementById('start-btn').style.display = 'none';
 
-            // Dostęp do akcelerometru
             if (typeof DeviceMotionEvent !== 'undefined' && typeof DeviceMotionEvent.requestPermission === 'function') {
                 DeviceMotionEvent.requestPermission()
                     .then(response => {
@@ -211,7 +237,6 @@
 
             const beta = event.beta;
 
-            // Skłon w dół = Zgadnięte
             if (beta > 120 || beta < -120) {
                 triggerAction('zgadniete');
             }
@@ -243,6 +268,12 @@
 
         function endGame(reason) {
             gameActive = false;
+
+            // Zwolnienie blokady ekranu po zakończeniu gry
+            if (wakeLock !== null) {
+                wakeLock.release();
+                wakeLock = null;
+            }
 
             document.getElementById('counter').innerText = "KONIEC!";
             document.getElementById('category').innerText = "PODSUMOWANIE RUNDY";
