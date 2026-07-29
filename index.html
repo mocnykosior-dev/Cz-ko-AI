@@ -46,7 +46,7 @@
             max-width: 600px;
             box-shadow: 0 10px 30px rgba(0,0,0,0.5);
             border: 5px solid #333;
-            transition: border-color 0.2s ease;
+            transition: border-color 0.2s ease, transform 0.1s ease;
             margin: auto 0;
             display: flex;
             flex-direction: column;
@@ -141,6 +141,7 @@
         const SHEET_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:json`;
 
         const SONGS_PER_ROUND = 10;
+        const COOLDOWN_TIME = 1200; // Pauza 1.2 sekundy zapobiegająca przeszkakiwaniu piosenek
 
         let allSongs = [];
         let availableSongs = [];
@@ -240,7 +241,8 @@
 
             const beta = event.beta;
 
-            if (beta > 120 || beta < -120) {
+            // Zwiększony proóg skłonu (140° zamiast 120°), aby skłon musiał być bardziej zdecydowany
+            if (beta > 140 || beta < -140) {
                 triggerAction('zgadniete');
             }
         }
@@ -251,22 +253,23 @@
         }
 
         function triggerAction(type) {
-            isCooldown = true;
+            isCooldown = true; // Zablokowanie żyroskopu i dotyku
             const card = document.getElementById('card');
             
             if (type === 'zgadniete') {
                 scoreCorrect++;
-                card.style.borderColor = '#00ff88';
+                card.style.borderColor = '#00ff88'; // Zielone podświetlenie
             } else {
                 scorePassed++;
-                card.style.borderColor = '#ff3366';
+                card.style.borderColor = '#ff3366'; // Czerwone podświetlenie
             }
 
+            // Wydłużony czasy pauzy (1.2 s), który daje czas na wyprostowanie telefonu na czole
             setTimeout(() => {
                 card.style.borderColor = '#333';
                 if (gameActive) drawSong();
-                isCooldown = false;
-            }, 800);
+                isCooldown = false; // Odblokowanie po powrocie do pozycji pionowej
+            }, COOLDOWN_TIME);
         }
 
         function endGame(reason) {
