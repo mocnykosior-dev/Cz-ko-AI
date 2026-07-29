@@ -20,8 +20,8 @@
             overflow: hidden;
             user-select: none;
         }
-        .timer-bar {
-            font-size: 2.5rem;
+        .counter-bar {
+            font-size: 2rem;
             font-weight: bold;
             color: #ff007f;
             margin-bottom: 10px;
@@ -100,13 +100,13 @@
 <body onclick="handleTap(event)">
 
     <div class="status" id="status">Ładowanie bazy...</div>
-    <div class="timer-bar" id="timer">60s</div>
+    <div class="counter-bar" id="counter">1 / 10</div>
 
     <div class="card" id="card">
         <div class="category" id="category">🎈 CZÓŁKO AI</div>
         <div class="title" id="title">Gotowy na rundę?</div>
         <div class="artist" id="artist">Trzymaj telefon na czole!</div>
-        <div class="lyric" id="lyric">Runda trwa 60 sekund. Zgadnięcie = Skłon w dół | Pas = Dotknij ekranu.</div>
+        <div class="lyric" id="lyric">Każdy gracz dostaje 10 piosenek. Zgadnięcie = Skłon w dół | Pas = Dotknij ekranu.</div>
         <button class="btn" id="start-btn" onclick="startGame(event)">START GRY</button>
     </div>
 
@@ -119,6 +119,8 @@
         const SHEET_ID = '1l1vzr1-rhgaR_tUM0Uj1fZhrFuGDpuLT67Bk4WVXT3Q';
         const SHEET_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:json`;
 
+        const SONGS_PER_ROUND = 10; // Liczba piosenek dla jednego gracza
+
         let allSongs = [];
         let availableSongs = [];
         let currentSong = null;
@@ -127,8 +129,7 @@
         
         let scoreCorrect = 0;
         let scorePassed = 0;
-        let timeLeft = 60;
-        let timerInterval = null;
+        let songsPlayedCount = 0;
 
         async function fetchSongs() {
             try {
@@ -152,15 +153,23 @@
         }
 
         function drawSong() {
-            if (availableSongs.length === 0) {
-                endGame("Wykorzystano wszystkie piosenki!");
+            // Sprawdź czy gracz rozegrał już 10 piosenek
+            if (songsPlayedCount >= SONGS_PER_ROUND) {
+                endGame("Runda zakończona!");
                 return;
             }
 
-            // Losowanie bez powtórzeń (usuwamy wylosowaną z puli dostępnych)
+            // Jeśli pula się skończyła, odśwież dostępną listę z całej bazy
+            if (availableSongs.length === 0) {
+                availableSongs = [...allSongs];
+            }
+
+            // Losowanie bez powtórek
             const randomIndex = Math.floor(Math.random() * availableSongs.length);
             currentSong = availableSongs.splice(randomIndex, 1)[0];
+            songsPlayedCount++;
 
+            document.getElementById('counter').innerText = `${songsPlayedCount} / ${SONGS_PER_ROUND}`;
             document.getElementById('category').innerText = currentSong.category;
             document.getElementById('title').innerText = currentSong.title;
             document.getElementById('artist').innerText = currentSong.artist;
@@ -170,17 +179,19 @@
         function startGame(event) {
             if(event) event.stopPropagation();
 
-            // Reset stanu gry
-            availableSongs = [...allSongs];
+            // Jeśli pula piosenek jest zbyt mała, załaduj całą bazę od nowa
+            if (availableSongs.length < SONGS_PER_ROUND) {
+                availableSongs = [...allSongs];
+            }
+
             scoreCorrect = 0;
             scorePassed = 0;
-            timeLeft = 60;
+            songsPlayedCount = 0;
             gameActive = true;
 
-            document.getElementById('timer').innerText = `${timeLeft}s`;
             document.getElementById('start-btn').style.display = 'none';
 
-            // Prośba o dostęp do czujników ruchu (iOS/Android)
+            // Dostęp do akcelerometru
             if (typeof DeviceMotionEvent !== 'undefined' && typeof DeviceMotionEvent.requestPermission === 'function') {
                 DeviceMotionEvent.requestPermission()
                     .then(response => {
@@ -193,31 +204,20 @@
             }
 
             drawSong();
-
-            // Uruchomienie odliczania
-            clearInterval(timerInterval);
-            timerInterval = setInterval(() => {
-                timeLeft--;
-                document.getElementById('timer').innerText = `${timeLeft}s`;
-                if (timeLeft <= 0) {
-                    endGame("Czas minął!");
-                }
-            }, 1000);
         }
 
         function handleMotion(event) {
             if (!gameActive || isCooldown) return;
 
-            const beta = event.beta; // Przechylenie przód/tył
+            const beta = event.beta;
 
-            // Skłon telefonu w stronę podłogi (Zgadnięte)
+            // Skłon w dół = Zgadnięte
             if (beta > 120 || beta < -120) {
                 triggerAction('zgadniete');
             }
         }
 
         function handleTap(event) {
-            // Reaguj tylko podczas trwającej gry
             if (!gameActive || isCooldown) return;
             triggerAction('pas');
         }
@@ -228,10 +228,10 @@
             
             if (type === 'zgadniete') {
                 scoreCorrect++;
-                card.style.borderColor = '#00ff88'; // Zielona ramka
+                card.style.borderColor = '#00ff88';
             } else {
                 scorePassed++;
-                card.style.borderColor = '#ff3366'; // Czerwona ramka
+                card.style.borderColor = '#ff3366';
             }
 
             setTimeout(() => {
@@ -243,20 +243,20 @@
 
         function endGame(reason) {
             gameActive = false;
-            clearInterval(timerInterval);
 
-            document.getElementById('category').innerText = "KONIEC RUNDY!";
+            document.getElementById('counter').innerText = "KONIEC!";
+            document.getElementById('category').innerText = "PODSUMOWANIE RUNDY";
             document.getElementById('title').innerText = reason;
             document.getElementById('artist').innerHTML = `
                 <div class="score-board">
-                    ✅ Zgadnięte: <b>${scoreCorrect}</b><br>
+                    ✅ Zgadnięte: <b>${scoreCorrect} / ${SONGS_PER_ROUND}</b><br>
                     ❌ Pas: <b>${scorePassed}</b>
                 </div>
             `;
-            document.getElementById('lyric').innerText = "Świetna robota! Kliknij poniżej, aby zagrać ponownie.";
+            document.getElementById('lyric').innerText = "Przekaż telefon następnemu graczowi!";
             
             const startBtn = document.getElementById('start-btn');
-            startBtn.innerText = "ZAGRAJ PONOWNIE";
+            startBtn.innerText = "NASTĘPNY GRACZ";
             startBtn.style.display = 'inline-block';
         }
 
