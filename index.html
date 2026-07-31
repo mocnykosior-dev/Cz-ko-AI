@@ -2,157 +2,38 @@
 <html lang="pl">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Jaka to piosenka?</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Czółko AI - Piosenki</title>
+    
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Czółko AI">
+
     <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
         body {
-            font-family: Arial, sans-serif;
-            margin: 0;
-            padding: 0;
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            align-items: center;
-            height: 100vh;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
             background-color: #121212;
             color: #ffffff;
-            text-align: center;
-            user-select: none;
-        }
-
-        #game-container {
             display: flex;
             flex-direction: column;
+            justify-content: space-between;
             align-items: center;
-            justify-content: center;
-            width: 90%;
-            max-width: 600px;
+            min-height: 100vh;
+            min-height: 100dvh; 
+            text-align: center;
+            padding-top: max(15px, env(safe-area-inset-top));
+            padding-bottom: max(15px, env(safe-area-inset-bottom));
+            padding-left: max(15px, env(safe-area-inset-left));
+            padding-right: max(15px, env(safe-area-inset-right));
+            overflow: hidden;
+            user-select: none;
         }
-
-        h1 {
-            font-size: 2.5rem;
-            margin-bottom: 20px;
+        .header-container {
+            width: 100%;
+            margin-top: 5px;
         }
-
-        #song-display {
-            font-size: 2rem;
-            font-weight: bold;
-            margin: 30px 0;
-            min-height: 80px;
-            color: #00ff88;
-        }
-
-        #score-display {
-            font-size: 1.5rem;
-            margin-bottom: 20px;
-        }
-
-        button {
-            padding: 15px 30px;
-            font-size: 1.2rem;
-            font-weight: bold;
-            border: none;
-            border-radius: 8px;
-            background-color: #00ff88;
-            color: #121212;
-            cursor: pointer;
-            transition: transform 0.1s, background-color 0.2s;
-        }
-
-        button:active {
-            transform: scale(0.95);
-        }
-    </style>
-</head>
-<body>
-
-    <div id="game-container">
-        <h1>Jaka to piosenka?</h1>
-        <div id="score-display">Punkty: <span id="score">0</span></div>
-        <div id="song-display">Naciśnij START</div>
-        <button id="start-btn" onclick="startGame()">START</button>
-    </div>
-
-    <script>
-        // Lista piosenek
-        const songs = [
-            "Ona Tańczy Dla Mnie",
-            "Małomiasteczkowy",
-            "Szansa na Akces",
-            "Przez Twe Oczy Zielone",
-            "Ale jazz!",
-            "Za krokiem krok",
-            "Dni, których nie znamy",
-            "Bujaj się",
-            "Złote Tarasy"
-        ];
-
-        let currentScore = 0;
-        let gameActive = false;
-        let canTrigger = true;
-        let isPositionReset = true; // Flaga bezpieczeństwa dla żyrka
-
-        function startGame() {
-            // Wymagane na iOS do odblokowania czujników
-            if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
-                DeviceOrientationEvent.requestPermission()
-                    .then(response => {
-                        if (response === 'granted') {
-                            initGame();
-                        } else {
-                            alert("Brak zgody na dostęp do czujnika ruchu.");
-                        }
-                    })
-                    .catch(console.error);
-            } else {
-                initGame();
-            }
-        }
-
-        function initGame() {
-            currentScore = 0;
-            gameActive = true;
-            document.getElementById('score').innerText = currentScore;
-            document.getElementById('start-btn').style.display = 'none';
-            nextSong();
-        }
-
-        function nextSong() {
-            const randomIndex = Math.floor(Math.random() * songs.length);
-            document.getElementById('song-display').innerText = songs[randomIndex];
-        }
-
-        function scorePoint() {
-            if (!gameActive) return;
-            currentScore++;
-            document.getElementById('score').innerText = currentScore;
-            nextSong();
-        }
-
-        // --- CZUJNIK ŻYROSKOPU ---
-        window.addEventListener('deviceorientation', (event) => {
-            if (!gameActive || !canTrigger) return;
-
-            let tilt = event.beta; // Nachylenie w stopniach
-
-            // 1. Telefon musi wrócić do pozycji pionowej (75-105 stopni)
-            if (tilt > 75 && tilt < 105) {
-                isPositionReset = true;
-            }
-
-            // 2. Zaliczamy punkt przy wychyleniu dłoni w dół o ~60-70 st. (poniżej 25°)
-            if (isPositionReset && tilt < 25) {
-                isPositionReset = false;
-                canTrigger = false;
-
-                scorePoint();
-
-                // Odczekaj 1.2 sekundy przed kolejną akcją
-                setTimeout(() => {
-                    canTrigger = true;
-                }, 1200);
-            }
-        });
-    </script>
-</body>
-</html>
+        .counter-bar {
+            font-size: 2.8rem;
+            font-weight: 900;
+            color: #
