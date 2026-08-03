@@ -36,4 +36,293 @@
         .counter-bar {
             font-size: 2.8rem;
             font-weight: 900;
-            color: #
+            color: #ff007f;
+        }
+        .card {
+            background: #1e1e2e;
+            border-radius: 28px;
+            padding: 30px 20px;
+            width: 100%;
+            max-width: 600px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            border: 5px solid #333;
+            transition: border-color 0.2s ease;
+            margin: auto 0;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+        }
+        .category {
+            font-size: 1.4rem;
+            color: #ff007f;
+            text-transform: uppercase;
+            font-weight: 800;
+            margin-bottom: 12px;
+            letter-spacing: 2px;
+        }
+        .title {
+            font-size: 3rem;
+            font-weight: 900;
+            margin-bottom: 12px;
+            color: #ffffff;
+            line-height: 1.15;
+            word-break: break-word;
+        }
+        .artist {
+            font-size: 2rem;
+            color: #00f2fe;
+            margin-bottom: 20px;
+            font-weight: 700;
+        }
+        .lyric {
+            font-size: 1.3rem;
+            font-style: italic;
+            color: #dddddd;
+            background: rgba(255,255,255,0.08);
+            padding: 16px;
+            border-radius: 16px;
+            border-left: 6px solid #ff007f;
+            line-height: 1.3;
+        }
+        .btn {
+            background: #00f2fe;
+            color: #000;
+            border: none;
+            padding: 22px 44px;
+            font-size: 1.6rem;
+            font-weight: 900;
+            border-radius: 50px;
+            cursor: pointer;
+            margin-top: 20px;
+            box-shadow: 0 4px 20px rgba(0,242,254,0.5);
+            text-transform: uppercase;
+        }
+        .instructions {
+            margin-bottom: 5px;
+            font-size: 1.1rem;
+            color: #aaa;
+            line-height: 1.4;
+            font-weight: 600;
+        }
+        .status {
+            font-size: 0.9rem;
+            color: #888;
+        }
+        .score-board {
+            font-size: 2.2rem;
+            margin: 20px 0;
+            color: #00f2fe;
+            line-height: 1.5;
+        }
+    </style>
+</head>
+<body onclick="handleTap(event)">
+
+    <div class="header-container">
+        <div class="status" id="status">Ładowanie bazy...</div>
+        <div class="counter-bar" id="counter">1 / 10</div>
+    </div>
+
+    <div class="card" id="card">
+        <div class="category" id="category">🎈 CZÓŁKO AI</div>
+        <div class="title" id="title">Gotowy na rundę?</div>
+        <div class="artist" id="artist">Trzymaj telefon w dłoniach!</div>
+        <div class="lyric" id="lyric">Każdy gracz dostaje 10 piosenek. Zgadnięcie = Skłon dłonią w dół | Pas = Dotknij ekranu.</div>
+        <button class="btn" id="start-btn" onclick="startGame(event)">START GRY</button>
+    </div>
+
+    <div class="instructions" id="instructions">
+        👇 Przechyl dłonią w DÓŁ = Zgadnięte (+1 pkt)<br>
+        👆 Dotknij ekranu = PAS (Następna)
+    </div>
+
+    <script>
+        const SHEET_ID = '1l1vzr1-rhgaR_tUM0Uj1fZhrFuGDpuLT67Bk4WVXT3Q';
+        const SHEET_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:json`;
+
+        const SONGS_PER_ROUND = 10;
+        const COOLDOWN_TIME = 1200; // Pauza 1.2s
+
+        let allSongs = [];
+        let availableSongs = [];
+        let currentSong = null;
+        let isCooldown = false;
+        let isWaitingForNeutral = false; // Wymóg powrotu do pionu
+        let gameActive = false;
+        
+        let scoreCorrect = 0;
+        let scorePassed = 0;
+        let songsPlayedCount = 0;
+        let wakeLock = null;
+
+        async function requestWakeLock() {
+            try {
+                if ('wakeLock' in navigator) {
+                    wakeLock = await navigator.wakeLock.request('screen');
+                }
+            } catch (err) {
+                console.log('Wake Lock Error:', err);
+            }
+        }
+
+        async function fetchSongs() {
+            try {
+                const response = await fetch(SHEET_URL);
+                const text = await response.text();
+                
+                // Wyciąganie JSON-a z odpowiedzi Google Sheets
+                const jsonText = text.substring(text.indexOf('{'), text.lastIndexOf('}') + 1);
+                const json = JSON.parse(jsonText);
+                
+                const rows = json.table.rows;
+                allSongs = rows.map(row => ({
+                    title: row.c[0] ? String(row.c[0].v) : '',
+                    artist: row.c[1] ? String(row.c[1].v) : '',
+                    category: row.c[2] ? String(row.c[2].v) : 'Muzyka',
+                    lyric: row.c[3] ? String(row.c[3].v) : ''
+                })).filter(song => song.title !== '' && song.title.toLowerCase() !== 'tytuł');
+
+                if (allSongs.length > 0) {
+                    document.getElementById('status').innerText = `Wczytano ${allSongs.length} piosenek!`;
+                } else {
+                    document.getElementById('status').innerText = 'Baza jest pusta!';
+                }
+            } catch (err) {
+                document.getElementById('status').innerText = 'Błąd pobierania bazy danych!';
+                console.error('Fetch Error:', err);
+            }
+        }
+
+        function drawSong() {
+            if (songsPlayedCount >= SONGS_PER_ROUND) {
+                endGame("Runda zakończona!");
+                return;
+            }
+
+            if (availableSongs.length === 0) {
+                availableSongs = [...allSongs];
+            }
+
+            const randomIndex = Math.floor(Math.random() * availableSongs.length);
+            currentSong = availableSongs.splice(randomIndex, 1)[0];
+            songsPlayedCount++;
+
+            document.getElementById('counter').innerText = `${songsPlayedCount} / ${SONGS_PER_ROUND}`;
+            document.getElementById('category').innerText = currentSong.category;
+            document.getElementById('title').innerText = currentSong.title;
+            document.getElementById('artist').innerText = currentSong.artist;
+            document.getElementById('lyric').innerText = currentSong.lyric ? `"${currentSong.lyric}"` : '';
+        }
+
+        function startGame(event) {
+            if (event) event.stopPropagation();
+
+            requestWakeLock();
+
+            if (allSongs.length === 0) {
+                alert("Baza piosenek się jeszcze nie wczytała. Sprawdź połączenie!");
+                return;
+            }
+
+            if (availableSongs.length < SONGS_PER_ROUND) {
+                availableSongs = [...allSongs];
+            }
+
+            scoreCorrect = 0;
+            scorePassed = 0;
+            songsPlayedCount = 0;
+            gameActive = true;
+            isCooldown = false;
+            isWaitingForNeutral = false;
+
+            document.getElementById('start-btn').style.display = 'none';
+
+            if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
+                DeviceOrientationEvent.requestPermission()
+                    .then(response => {
+                        if (response === 'granted') {
+                            window.addEventListener('deviceorientation', handleMotion);
+                        }
+                    }).catch(console.error);
+            } else {
+                window.addEventListener('deviceorientation', handleMotion);
+            }
+
+            drawSong();
+        }
+
+        function handleMotion(event) {
+            if (!gameActive) return;
+
+            const beta = event.beta; // Przechylenie wzdłużne
+
+            // Wymóg wyprostowania dłoni do pozycji pionowej (~90°)
+            if (isWaitingForNeutral) {
+                if (beta >= 70 && beta <= 110) {
+                    isWaitingForNeutral = false;
+                }
+                return;
+            }
+
+            if (isCooldown) return;
+
+            // Skłon dłonią w dół: beta < 25° oznacza pochylenie o ponad 65° z pionu
+            if (beta < 25 && beta > -60) {
+                triggerAction('zgadniete');
+            }
+        }
+
+        function handleTap(event) {
+            if (!gameActive || isCooldown) return;
+            triggerAction('pas');
+        }
+
+        function triggerAction(type) {
+            isCooldown = true;
+            isWaitingForNeutral = true;
+            
+            const card = document.getElementById('card');
+            
+            if (type === 'zgadniete') {
+                scoreCorrect++;
+                card.style.borderColor = '#00ff88';
+            } else {
+                scorePassed++;
+                card.style.borderColor = '#ff3366';
+            }
+
+            setTimeout(() => {
+                card.style.borderColor = '#333';
+                if (gameActive) drawSong();
+                isCooldown = false;
+            }, COOLDOWN_TIME);
+        }
+
+        function endGame(reason) {
+            gameActive = false;
+
+            if (wakeLock !== null) {
+                wakeLock.release();
+                wakeLock = null;
+            }
+
+            document.getElementById('counter').innerText = "KONIEC!";
+            document.getElementById('category').innerText = "PODSUMOWANIE RUNDY";
+            document.getElementById('title').innerText = reason;
+            document.getElementById('artist').innerHTML = `
+                <div class="score-board">
+                    ✅ Zgadnięte: <b>${scoreCorrect} / ${SONGS_PER_ROUND}</b><br>
+                    ❌ Pas: <b>${scorePassed}</b>
+                </div>
+            `;
+            document.getElementById('lyric').innerText = "Przekaż telefon następnemu graczowi!";
+            
+            const startBtn = document.getElementById('start-btn');
+            startBtn.innerText = "NASTĘPNY GRACZ";
+            startBtn.style.display = 'inline-block';
+        }
+
+        fetchSongs();
+    </script>
+</body>
+</html>
