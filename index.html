@@ -141,13 +141,12 @@
         const SHEET_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:json`;
 
         const SONGS_PER_ROUND = 10;
-        const COOLDOWN_TIME = 1200; // Pauza 1.2s
+        const COOLDOWN_TIME = 1200; // Pauza 1.2 sekundy zabezpieczająca przed przeskakiwaniem
 
         let allSongs = [];
         let availableSongs = [];
         let currentSong = null;
         let isCooldown = false;
-        let isWaitingForNeutral = false; // Wymóg powrotu do pionu
         let gameActive = false;
         
         let scoreCorrect = 0;
@@ -170,7 +169,6 @@
                 const response = await fetch(SHEET_URL);
                 const text = await response.text();
                 
-                // Wyciąganie JSON-a z odpowiedzi Google Sheets
                 const jsonText = text.substring(text.indexOf('{'), text.lastIndexOf('}') + 1);
                 const json = JSON.parse(jsonText);
                 
@@ -233,7 +231,6 @@
             songsPlayedCount = 0;
             gameActive = true;
             isCooldown = false;
-            isWaitingForNeutral = false;
 
             document.getElementById('start-btn').style.display = 'none';
 
@@ -252,22 +249,13 @@
         }
 
         function handleMotion(event) {
-            if (!gameActive) return;
+            if (!gameActive || isCooldown) return;
 
-            const beta = event.beta; // Przechylenie wzdłużne
+            const beta = event.beta; // Nachylenie przód/tył
 
-            // Wymóg wyprostowania dłoni do pozycji pionowej (~90°)
-            if (isWaitingForNeutral) {
-                if (beta >= 70 && beta <= 110) {
-                    isWaitingForNeutral = false;
-                }
-                return;
-            }
-
-            if (isCooldown) return;
-
-            // Skłon dłonią w dół: beta < 25° oznacza pochylenie o ponad 65° z pionu
-            if (beta < 25 && beta > -60) {
+            // Wykrywanie skłonu dłonią w dół:
+            // Telefon w pionie to ~90°. Gdy przechylisz go w dół poniżej 45°, wyzwala się trafienie.
+            if (beta < 45 && beta > -60) {
                 triggerAction('zgadniete');
             }
         }
@@ -279,18 +267,17 @@
 
         function triggerAction(type) {
             isCooldown = true;
-            isWaitingForNeutral = true;
-            
             const card = document.getElementById('card');
             
             if (type === 'zgadniete') {
                 scoreCorrect++;
-                card.style.borderColor = '#00ff88';
+                card.style.borderColor = '#00ff88'; // Zielona ramka
             } else {
                 scorePassed++;
-                card.style.borderColor = '#ff3366';
+                card.style.borderColor = '#ff3366'; // Czerwona ramka
             }
 
+            // Odczekujemy 1.2 sekundy zanim odblokujemy możliwość wykonania kolejnego skłonu/tapnięcia
             setTimeout(() => {
                 card.style.borderColor = '#333';
                 if (gameActive) drawSong();
