@@ -43,7 +43,7 @@
             border-radius: 28px;
             padding: 30px 20px;
             width: 100%;
-            max-width: 600px;
+            max-width: 650px;
             box-shadow: 0 10px 30px rgba(0,0,0,0.5);
             border: 5px solid #333;
             transition: border-color 0.2s ease;
@@ -61,7 +61,7 @@
             letter-spacing: 2px;
         }
         .title {
-            font-size: 3rem;
+            font-size: 2.8rem;
             font-weight: 900;
             margin-bottom: 12px;
             color: #ffffff;
@@ -69,17 +69,17 @@
             word-break: break-word;
         }
         .artist {
-            font-size: 2rem;
+            font-size: 1.8rem;
             color: #00f2fe;
-            margin-bottom: 20px;
+            margin-bottom: 18px;
             font-weight: 700;
         }
         .lyric {
-            font-size: 1.3rem;
+            font-size: 1.2rem;
             font-style: italic;
             color: #dddddd;
             background: rgba(255,255,255,0.08);
-            padding: 16px;
+            padding: 14px;
             border-radius: 16px;
             border-left: 6px solid #ff007f;
             line-height: 1.3;
@@ -88,29 +88,29 @@
             background: #00f2fe;
             color: #000;
             border: none;
-            padding: 22px 44px;
-            font-size: 1.6rem;
+            padding: 20px 40px;
+            font-size: 1.5rem;
             font-weight: 900;
             border-radius: 50px;
             cursor: pointer;
-            margin-top: 20px;
+            margin-top: 15px;
             box-shadow: 0 4px 20px rgba(0,242,254,0.5);
             text-transform: uppercase;
         }
         .instructions {
             margin-bottom: 5px;
-            font-size: 1.1rem;
+            font-size: 1rem;
             color: #aaa;
             line-height: 1.4;
             font-weight: 600;
         }
         .status {
-            font-size: 0.9rem;
+            font-size: 0.85rem;
             color: #888;
         }
         .score-board {
-            font-size: 2.2rem;
-            margin: 20px 0;
+            font-size: 2rem;
+            margin: 15px 0;
             color: #00f2fe;
             line-height: 1.5;
         }
@@ -126,13 +126,13 @@
     <div class="card" id="card">
         <div class="category" id="category">🎈 CZÓŁKO AI</div>
         <div class="title" id="title">Gotowy na rundę?</div>
-        <div class="artist" id="artist">Trzymaj telefon w dłoniach!</div>
-        <div class="lyric" id="lyric">Każdy gracz dostaje 10 piosenek. Zgadnięcie = Skłon dłonią w dół | Pas = Dotknij ekranu.</div>
+        <div class="artist" id="artist">Trzymaj telefon przy czole!</div>
+        <div class="lyric" id="lyric">Każdy gracz dostaje 10 piosenek. Zgadnięcie = Skłon głową/telefonem w dół | Pas = Dotknij ekranu.</div>
         <button class="btn" id="start-btn" onclick="startGame(event)">START GRY</button>
     </div>
 
     <div class="instructions" id="instructions">
-        👇 Przechyl dłonią w DÓŁ = Zgadnięte (+1 pkt)<br>
+        👇 Skłon w DÓŁ = Zgadnięte (+1 pkt)<br>
         👆 Dotknij ekranu = PAS (Następna)
     </div>
 
@@ -141,12 +141,14 @@
         const SHEET_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:json`;
 
         const SONGS_PER_ROUND = 10;
-        const COOLDOWN_TIME = 1200; // Pauza 1.2 sekundy zabezpieczająca przed przeskakiwaniem
+        const COOLDOWN_TIME = 1000; // 1 sekunda blokady
 
         let allSongs = [];
         let availableSongs = [];
         let currentSong = null;
+        
         let isCooldown = false;
+        let isReadyForNextMove = true; // Wymóg powrotu do pionu
         let gameActive = false;
         
         let scoreCorrect = 0;
@@ -182,12 +184,10 @@
 
                 if (allSongs.length > 0) {
                     document.getElementById('status').innerText = `Wczytano ${allSongs.length} piosenek!`;
-                } else {
-                    document.getElementById('status').innerText = 'Baza jest pusta!';
                 }
             } catch (err) {
                 document.getElementById('status').innerText = 'Błąd pobierania bazy danych!';
-                console.error('Fetch Error:', err);
+                console.error(err);
             }
         }
 
@@ -217,11 +217,6 @@
 
             requestWakeLock();
 
-            if (allSongs.length === 0) {
-                alert("Baza piosenek się jeszcze nie wczytała. Sprawdź połączenie!");
-                return;
-            }
-
             if (availableSongs.length < SONGS_PER_ROUND) {
                 availableSongs = [...allSongs];
             }
@@ -231,8 +226,12 @@
             songsPlayedCount = 0;
             gameActive = true;
             isCooldown = false;
+            isReadyForNextMove = true;
 
             document.getElementById('start-btn').style.display = 'none';
+
+            // Usunięcie starych słuchaczy, żeby zdarzenia się nie dublowały
+            window.removeEventListener('deviceorientation', handleMotion);
 
             if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
                 DeviceOrientationEvent.requestPermission()
@@ -249,13 +248,28 @@
         }
 
         function handleMotion(event) {
-            if (!gameActive || isCooldown) return;
+            if (!gameActive) return;
 
-            const beta = event.beta; // Nachylenie przód/tył
+            // Sprawdzamy kąt w zależności od orientacji telefonu (Poziomo vs Pionowo)
+            const isLandscape = Math.abs(window.orientation || 0) === 90;
+            
+            // W trybie poziomym (landscape) nachylenie czółka w dół to zmiana kąta gamma!
+            const currentTilt = isLandscape ? Math.abs(event.gamma) : event.beta;
 
-            // Wykrywanie skłonu dłonią w dół:
-            // Telefon w pionie to ~90°. Gdy przechylisz go w dół poniżej 45°, wyzwala się trafienie.
-            if (beta < 45 && beta > -60) {
+            // 1. Sprawdzamy czy telefon powrócił do pozycji pionowej przy czole (pozycja neutralna)
+            if (!isReadyForNextMove) {
+                // Pozycja pionowa przy czole: w krajobrazie gamma > 60°, w pionie beta > 60°
+                if (currentTilt > 65) {
+                    isReadyForNextMove = true;
+                }
+                return;
+            }
+
+            if (isCooldown) return;
+
+            // 2. Skłon telefonu w stronę podłogi (skłon głową)
+            // W trybie poziomym przechylenie w dół zmniejsza gamma < 35°
+            if (currentTilt < 35 && currentTilt > -35) {
                 triggerAction('zgadniete');
             }
         }
@@ -267,17 +281,18 @@
 
         function triggerAction(type) {
             isCooldown = true;
+            isReadyForNextMove = false; // Musi wrócić do pionu na czółku, żeby znowu zadziałać!
+            
             const card = document.getElementById('card');
             
             if (type === 'zgadniete') {
                 scoreCorrect++;
-                card.style.borderColor = '#00ff88'; // Zielona ramka
+                card.style.borderColor = '#00ff88';
             } else {
                 scorePassed++;
-                card.style.borderColor = '#ff3366'; // Czerwona ramka
+                card.style.borderColor = '#ff3366';
             }
 
-            // Odczekujemy 1.2 sekundy zanim odblokujemy możliwość wykonania kolejnego skłonu/tapnięcia
             setTimeout(() => {
                 card.style.borderColor = '#333';
                 if (gameActive) drawSong();
@@ -287,6 +302,7 @@
 
         function endGame(reason) {
             gameActive = false;
+            window.removeEventListener('deviceorientation', handleMotion);
 
             if (wakeLock !== null) {
                 wakeLock.release();
